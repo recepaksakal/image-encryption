@@ -258,6 +258,10 @@
                             $(".alert").addClass("alert-danger")
                             $(".alert").append("<p>HATA! :Fotoğraf bulunamadı, lütfen fotoğrafı yükleyip tekrar deneyiniz.</p>")
                             $(".alert").removeClass("d-none")
+                        } else if (response == 403) {
+                            $(".alert").addClass("alert-danger")
+                            $(".alert").append("<p>HATA! :Desteklenmeyen fotoğraf, lütfen başka bir fotoğraf deneyiniz.</p>")
+                            $(".alert").removeClass("d-none")
                         } else {
                             var res = response.split(":")
                             if (res[0] == 200) {

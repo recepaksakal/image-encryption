@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, redirect
-import sqlite3
 import os
 
 
@@ -7,11 +6,11 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/imgs'
 app.config['ENCRYPTED_FOLDER'] = 'static/encrypted'
 app.config['DECRYPTED_FOLDER'] = 'static/decrypted'
+app.config['KEYS'] = 'static/keys'
 
 
 @app.route('/')
 def main():
-    remove_files()
     return render_template("home.html")
 
 
@@ -129,44 +128,50 @@ def encrypt():
         if os.path.isfile(path):
             from PIL import Image
             import numpy as np
-            import sqlite3
 
             img = Image.open(path)
             img_arr = np.asarray(img)
             sh = img_arr.shape
-            height = sh[0]
-            width = sh[1]
-            byt = sh[2]
-            bytesize = height * width * byt
-            puf = PUF(bytesize)
-            bitsize = (bytesize*8)+1
-            rb = rnd(bitsize)
-            key = []
-            for i in range(bytesize):
-                xor = rb[i]^puf[i]
-                key.append(xor)
-            line = fractal(img_arr)
-            img_cypher = []
-            for i in range(bytesize):
-                xor = line[i]^key[i]
-                img_cypher.append(xor)
-            enc_img_arr = np.zeros([height, width, byt], dtype=np.uint8)
-            rf = re_fractal(height, width, byt, img_cypher)
-            for i in range(height):
-                for j in range(width):
-                    enc_img_arr[i][j] = rf[i][j]
-            img = Image.fromarray(enc_img_arr)
-            filename = filename.split('.')
-            filename = filename[0]+"-encrypted.png"
-            img.save(os.path.join(app.config['ENCRYPTED_FOLDER'], filename))
-            e_path = app.config['ENCRYPTED_FOLDER']+'/'+filename
-            enc_hash = get_hash(e_path)
-            con = sqlite3.connect("db.db")
-            con.execute("INSERT INTO encrypted(hash,key) VALUES(?,?)",(enc_hash,str(key)))
-            con.commit()
-            con.close()
-            rt="200:"+e_path
-            return rt
+            if len(sh) < 3:
+                return "403"
+            else:
+                height = sh[0]
+                width = sh[1]
+                byt = sh[2]
+                bytesize = height * width * byt
+                puf = PUF(bytesize)
+                bitsize = (bytesize*8)+1
+                rb = rnd(bitsize)
+                key = []
+                for i in range(bytesize):
+                    xor = rb[i]^puf[i]
+                    key.append(xor)
+                line = fractal(img_arr)
+                img_cypher = []
+                for i in range(bytesize):
+                    xor = line[i]^key[i]
+                    img_cypher.append(xor)
+                enc_img_arr = np.zeros([height, width, byt], dtype=np.uint8)
+                key_img = np.zeros([height, width, byt], dtype=np.uint8)
+                rf = re_fractal(height, width, byt, img_cypher)
+                key = re_fractal(height, width, byt, key)
+
+                for i in range(height):
+                    for j in range(width):
+                        enc_img_arr[i][j] = rf[i][j]
+                        key_img[i][j] = key[i][j]
+
+                img = Image.fromarray(enc_img_arr)
+                key_img = Image.fromarray(key_img)
+                filename = filename.split('.')
+                filename = filename[0]+"-encrypted.png"
+                img.save(os.path.join(app.config['ENCRYPTED_FOLDER'], filename))
+                e_path = app.config['ENCRYPTED_FOLDER']+'/'+filename
+                enc_hash = get_hash(e_path)
+                keyname = enc_hash+".png"
+                key_img.save(os.path.join(app.config['KEYS'], keyname))
+                rt="200:"+e_path
+                return rt
         else:
             return "404"
 
@@ -177,55 +182,45 @@ def decrypt():
         path = request.form["path"]
         filename = path.split('/')[-1]
         if os.path.isfile(path):
-            import sqlite3
-            con = sqlite3.connect("db.db")
-            cur = con.cursor()
-            enc_hash = get_hash(path)
-            cur.execute("SELECT key FROM encrypted WHERE hash = ?", [enc_hash])
-            key = cur.fetchall()
-            con.close()
-            if key == []:
+            from PIL import Image
+            import numpy as np
+
+            key = app.config['KEYS']+"/"+get_hash(path)+".png"
+            if not os.path.isfile(key):
                 return "404:key"
-            else:
-                from PIL import Image
-                import numpy as np
 
-                key = list(key[0])[0]
-                key = key.split('[')[1]
-                key = key.split(']')[0]
-                key = key.split(', ')
-                ikey = []
-                for k in key:
-                    ikey.append(int(k))
-                key = ikey
-                img = Image.open(path)
-                img_arr = np.asarray(img)
-                sh = img_arr.shape
-                height = sh[0]
-                width = sh[1]
-                byt = sh[2]
-                bytesize = height * width * byt
-                line = fractal(img_arr)
-                img_cypher = []
-                for i in range(bytesize):
-                    xor = line[i]^key[i]
-                    img_cypher.append(xor)
-                enc_img_arr = np.zeros([height, width, byt], dtype=np.uint8)
-                rf = re_fractal(height, width, byt, img_cypher)
-                for i in range(height):
-                    for j in range(width):
-                        enc_img_arr[i][j] = rf[i][j]
-                img = Image.fromarray(enc_img_arr)
 
-                filename = filename.split('-')
-                filename = filename[0]+".png"
-                img.save(os.path.join(app.config['DECRYPTED_FOLDER'], filename))
-                de_path = app.config['DECRYPTED_FOLDER']+'/'+filename
-                rt = "200:"+de_path
-                return rt
+            key = Image.open(key)
+            key = np.asarray(key)
+            img = Image.open(path)
+            img_arr = np.asarray(img)
+            sh = img_arr.shape
+            height = sh[0]
+            width = sh[1]
+            byt = sh[2]
+            bytesize = height * width * byt
+            line = fractal(img_arr)
+            key = fractal(key)
+            img_cypher = []
+            for i in range(bytesize):
+                xor = line[i]^key[i]
+                img_cypher.append(xor)
+            enc_img_arr = np.zeros([height, width, byt], dtype=np.uint8)
+            rf = re_fractal(height, width, byt, img_cypher)
+            for i in range(height):
+                for j in range(width):
+                    enc_img_arr[i][j] = rf[i][j]
+            img = Image.fromarray(enc_img_arr)
+
+            filename = filename.split('-')
+            filename = filename[0]+".png"
+            img.save(os.path.join(app.config['DECRYPTED_FOLDER'], filename))
+            de_path = app.config['DECRYPTED_FOLDER']+'/'+filename
+            rt = "200:"+de_path
+            return rt
         else:
             return "404:file"
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)

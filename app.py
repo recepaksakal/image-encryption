@@ -124,10 +124,12 @@ def get_hash(path):
 def encrypt():
     if request.method == 'POST':
         path = request.form["path"]
+        print("encrypt gelen path:", path)
         filename = path.split('/')[-1]
         if os.path.isfile(path):
             from PIL import Image
             import numpy as np
+            
 
             img = Image.open(path)
             img_arr = np.asarray(img)
@@ -180,6 +182,7 @@ def encrypt():
 def decrypt():
     if request.method == 'POST':
         path = request.form["path"]
+        print("decrypt gelen path:", path)
         filename = path.split('/')[-1]
         if os.path.isfile(path):
             from PIL import Image
@@ -188,7 +191,6 @@ def decrypt():
             key = app.config['KEYS']+"/"+get_hash(path)+".png"
             if not os.path.isfile(key):
                 return "404:key"
-
 
             key = Image.open(key)
             key = np.asarray(key)
@@ -211,9 +213,11 @@ def decrypt():
                 for j in range(width):
                     enc_img_arr[i][j] = rf[i][j]
             img = Image.fromarray(enc_img_arr)
+            print("fl: ", filename)
+            
+            filename = filename.split('.')
+            filename = filename[0]+"-decrypted.png"
 
-            filename = filename.split('-')
-            filename = filename[0]+".png"
             img.save(os.path.join(app.config['DECRYPTED_FOLDER'], filename))
             de_path = app.config['DECRYPTED_FOLDER']+'/'+filename
             rt = "200:"+de_path

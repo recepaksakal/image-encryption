@@ -1,7 +1,6 @@
 # image-encryption
 
  
-youtube linki: renderlanıyor eklenecek.
 
 proje süreci:
 
